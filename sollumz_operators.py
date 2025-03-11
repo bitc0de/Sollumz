@@ -304,6 +304,107 @@ class SOLLUMZ_OT_export_assets(bpy.types.Operator, TimedOperator):
         return os.path.join(self.directory, name + extension)
 
 
+class SOLLUMZ_OT_export_fivem_prop(bpy.types.Operator, TimedOperator):
+    """Export a 3D model as a Fivem prop"""
+    bl_idname = "sollumz.export_fivem_prop"
+    bl_label = "Export Fivem Prop"
+
+    filter_glob: bpy.props.StringProperty(
+        default=f"*{YDR.file_extension};*{YDD.file_extension};*{YFT.file_extension};*{YBN.file_extension};*{YCD.file_extension};*{YMAP.file_extension};",
+        options={"HIDDEN", "SKIP_SAVE"},
+        maxlen=255,
+    )
+
+    directory: bpy.props.StringProperty(
+        name="Output directory",
+        description="Select export output directory",
+        subtype="DIR_PATH",
+        options={"HIDDEN"}
+    )
+
+    def draw(self, context):
+        pass
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def execute_timed(self, context: bpy.types.Context):
+        with logger.use_operator_logger(self) as op_log:
+            logger.info("Starting export...")
+            objs = self.collect_objects(context)
+
+            self.directory = bpy.path.abspath(self.directory)
+
+            if not objs:
+                logger.info("No Sollumz objects in the scene to export!")
+                return {"CANCELLED"}
+
+            any_warnings_or_errors = False
+            for obj in objs:
+                op_log.clear_log_counts()
+                filepath = None
+                try:
+                    success = False
+                    if obj.sollum_type == SollumType.DRAWABLE:
+                        filepath = self.get_filepath(obj, YDR.file_extension)
+                        success = export_ydr(obj, filepath)
+                    elif obj.sollum_type == SollumType.BOUND_COMPOSITE:
+                        filepath = self.get_filepath(obj, YBN.file_extension)
+                        success = export_ybn(obj, filepath)
+                    else:
+                        continue
+
+                    if success:
+                        if op_log.has_warnings_or_errors:
+                            logger.info(f"Exported '{filepath}' with WARNINGS or ERRORS! Please check the Info Log for details.")
+                            any_warnings_or_errors = True
+                        else:
+                            logger.info(f"Successfully exported '{filepath}'")
+                    else:
+                        if op_log.has_warnings_or_errors:
+                            logger.info(f"Failed to export '{obj.name}', ERRORS found! Please check the Info Log for details.")
+                            any_warnings_or_errors = True
+                except:
+                    logger.error(f"Error exporting: {filepath or obj.name} \n {traceback.format_exc()}")
+                    any_warnings_or_errors = True
+                    return {"CANCELLED"}
+
+            ytyp = ytyp_from_objects(objs)
+            filepath = os.path.join(
+                self.directory, f"{ytyp.name}.ytyp.xml")
+            ytyp.write_xml(filepath)
+            logger.info(f"Successfully exported '{filepath}' (auto-generated)")
+
+            logger.info(f"Exported in {self.time_elapsed} seconds")
+            if any_warnings_or_errors:
+                bpy.ops.screen.info_log_show()
+            return {"FINISHED"}
+
+    def collect_objects(self, context: bpy.types.Context) -> list[bpy.types.Object]:
+        objs = context.scene.objects
+        return self.get_only_parent_objs(objs)
+
+    def get_only_parent_objs(self, objs: list[bpy.types.Object]):
+        parent_objs = set()
+        objs = set(objs)
+
+        for obj in objs:
+            parent_obj = find_sollumz_parent(obj)
+
+            if parent_obj is None or parent_obj in parent_objs:
+                continue
+
+            parent_objs.add(parent_obj)
+
+        return list(parent_objs)
+
+    def get_filepath(self, obj: bpy.types.Object, extension: str):
+        name = remove_number_suffix(obj.name.lower())
+
+        return os.path.join(self.directory, name + extension)
+
+
 class SOLLUMZ_OT_paint_vertices(SOLLUMZ_OT_base, bpy.types.Operator):
     """Paint All Vertices Of Selected Object"""
     bl_idname = "sollumz.paint_vertices"

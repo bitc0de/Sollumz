@@ -286,6 +286,9 @@ class SOLLUMZ_PT_TOOL_PANEL(bpy.types.Panel):
         else:
             row.operator("sollumz.export_assets")
 
+        row = layout.row()
+        row.operator("sollumz.export_fivem_prop")
+
 
 class GeneralToolChildPanel:
     bl_space_type = "VIEW_3D"
@@ -624,7 +627,7 @@ class FlagsPanel:
             if index > data_block.size - 1:
                 break
             grid.prop(data_block, prop_name)
-
+            
 
 class TimeFlagsPanel(FlagsPanel):
     bl_label = "Time Flags"
